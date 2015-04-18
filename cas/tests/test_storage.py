@@ -53,8 +53,10 @@ class TestStorage(unittest.TestCase):
         self.test_meta_loaded(new_cas)
 
     def test_add(self):
+        previous_updated = self.storage.updated
         sum = self.storage.add(self.testfile)
 
+        self.assertFalse(previous_updated == self.storage.updated)
         self.assertEquals(sum, self.checksum)
         self.assertTrue(self.storage.has_sum(sum))
         self.assertTrue(self.storage.has_file(self.testfile))
@@ -70,13 +72,17 @@ class TestStorage(unittest.TestCase):
         self.assertEquals(mtime, os.stat(path).st_mtime)
 
     def test_remove_miss(self):
+        previous_updated = self.storage.updated
         self.assertRaises(OSError, lambda: self.storage.remove(self.testfile))
+        self.assertTrue(previous_updated == self.storage.updated)
 
     def test_successful_remove(self):
+        previous_updated = self.storage.updated
         sum = self.storage.add(self.testfile)
         path = self.storage.path(sum)
 
         self.storage.remove(sum)
 
+        self.assertFalse(previous_updated == self.storage.updated)
         self.assertFalse(os.path.isfile(path))
         self.assertFalse(os.path.isdir(os.path.dirname(path)))

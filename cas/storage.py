@@ -129,6 +129,9 @@ class CAS(object):
 
         shutil.move(tmpfile, destdir)
 
+        self._update()
+        self._write_meta()
+
         return sum
 
     def remove(self, sum):
@@ -138,6 +141,9 @@ class CAS(object):
         path = self.path(sum)
         os.remove(path)
         self._clean_dir(os.path.dirname(path))
+
+        self._update()
+        self._write_meta()
 
     def clean(self):
         """
