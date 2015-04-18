@@ -52,7 +52,7 @@ class CAS(object):
         self.created = meta['created']
         self.updated = meta['updated']
         self.shard_width = meta['shard']['width']
-        self.shard_depth = meta['shard']['height']
+        self.shard_depth = meta['shard']['depth']
 
     def _dump_meta(self):
         return {
@@ -61,7 +61,7 @@ class CAS(object):
           'updated': self.updated, 
           'shard': { 
             'width': self.shard_width,
-            'height': self.shard_width,
+            'depth': self.shard_width,
           },
         }
 
@@ -102,7 +102,7 @@ class CAS(object):
         return os.path.join(self.root, 'storage')
 
     def has_sum(self, sum):
-        return os.path.isfile(self._path(sum))
+        return os.path.isfile(self.path(sum))
 
     def has_file(self, filename):
         return self.has_sum(self.checksum(filename))
@@ -117,7 +117,7 @@ class CAS(object):
             # don't re-add a file that already exists
             return
 
-        path = self._path(sum)
+        path = self.path(sum)
         destfile = os.path.basename(path)
         tmpfile = os.path.join(self.tmpdir, destfile)
 
@@ -129,11 +129,13 @@ class CAS(object):
 
         shutil.move(tmpfile, destdir)
 
+        return sum
+
     def remove(self, sum):
         if not self.has_sum(sum):
             raise OSError(errno.ENOENT, sum)
 
-        path = self._path(sum)
+        path = self.path(sum)
         os.remove(path)
         self._clean_dir(os.path.dirname(path))
 
@@ -150,7 +152,7 @@ class CAS(object):
     def _shard(self, sum):
         return shard(sum, self.shard_width, self.shard_depth)        
 
-    def _path(self, sum):
+    def path(self, sum):
         return os.path.join(self.storagedir, self._filename(sum))
 
     def _filename(self, sum):
