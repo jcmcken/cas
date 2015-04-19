@@ -5,6 +5,7 @@ setup(
   name='cas',
   version=cas.__version__,
   author=cas.__author__,
+  license='BSD',
   py_modules=['cas'],
   install_requires=open('requirements.txt').readlines(),
   entry_points="""
