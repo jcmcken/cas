@@ -13,13 +13,15 @@ class CASLocked(RuntimeError): pass
 
 class SumIndex(shelve.DbfilenameShelf):
     def add(self, sum):
-        self[sum] = None
+        LOG.debug('adding "%s" to sum index' % sum)
+        self[str(sum)] = None
 
     def remove(self, sum):
-        del self[sum]
+        LOG.debug('removing "%s" from sum index' % sum)
+        del self[str(sum)]
 
 class CAS(object):
-    def __init__(self, root, sharding=(2, 2)):
+    def __init__(self, root, sharding=(2, 2), autoload=True):
         self.root = fullpath(root)
         self.shard_width, self.shard_depth = sharding
 
@@ -29,12 +31,33 @@ class CAS(object):
 
         self._sum_index = None
 
-        self._initialize()
+        if autoload:
+            self._initialize()
 
     def __del__(self):
         self.unlock()
 
     __exit__ = __del__
+
+    @classmethod
+    def check(cls, directory):
+        """
+        Hint at whether the supplied directory is possibly a CAS
+
+        If possible, we want to avoid placing CAS storage into a directory
+        that already has junk in it.
+        """
+        cas = CAS(directory, autoload=False)
+
+        for dir in [cas.root, cas.storagedir, cas.tmpdir]:
+            if not os.path.isdir(dir):
+                return False    
+
+        for file in [cas.metafile, cas.sum_indexfile]:
+            if not os.path.isfile(file):
+                return False
+
+        return True
 
     def _initialize(self):
         self._initialize_dirs()
@@ -62,7 +85,9 @@ class CAS(object):
             self._load_meta()
 
     def _update(self):
+        old = self.updated
         self.updated = datetime.datetime.utcnow().isoformat()
+        LOG.debug('updating storage timestamp from "%s" to "%s"' % (old, self.updated))
 
     def _load_meta(self):
         meta = self._read_meta()
@@ -72,7 +97,7 @@ class CAS(object):
         self.shard_width = meta['shard']['width']
         self.shard_depth = meta['shard']['depth']
 
-    def _dump_meta(self):
+    def meta(self):
         return {
           'uuid': self.uuid,
           'created': self.created, 
@@ -84,7 +109,8 @@ class CAS(object):
         }
 
     def _write_meta(self):
-        json.dump(self._dump_meta(), open(self.metafile, 'w'))
+        LOG.debug('writing storage metadata')
+        json.dump(self.meta(), open(self.metafile, 'w'))
 
     def _read_meta(self):
         return json.load(open(self.metafile)) 
@@ -151,14 +177,17 @@ class CAS(object):
         sum = self.checksum(filename)
         
         if self.has_sum(sum):
+            LOG.warn('skipping, storage already has checksum "%s"' % sum)
             # don't re-add a file that already exists
             return
 
         path = self.path(sum)
         destfile = os.path.basename(path)
         tmpfile = os.path.join(self.tmpdir, destfile)
+        full = fullpath(filename)
 
-        shutil.copy2(fullpath(filename), tmpfile)
+        LOG.debug('copying "%s" to "%s"' % (full, tmpfile))
+        shutil.copy2(full, tmpfile)
       
         destdir = os.path.dirname(path)
 
@@ -168,6 +197,7 @@ class CAS(object):
         # to clean up if the add operation fails here
         self._sum_index.add(sum)
 
+        LOG.debug('moving "%s" to "%s"' % (tmpfile, destdir))
         shutil.move(tmpfile, destdir)
 
         self._update()

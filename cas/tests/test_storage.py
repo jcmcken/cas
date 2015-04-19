@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 from cas import CAS, CASLocked
+from cas.storage import SumIndex
 import shutil
 import os
 import json
@@ -31,10 +32,6 @@ class TestStorage(unittest.TestCase):
     def test_meta_loaded(self, storage=None):
         sto = storage or self.storage
         for meta in ['uuid', 'created', 'updated']:
-            print meta
-            print sto.uuid
-            print sto.created
-            print sto.updated
             self.assertTrue(isinstance(getattr(sto, meta), basestring))
         for meta in ['shard_width', 'shard_depth']:
             self.assertTrue(isinstance(getattr(sto, meta), int))
@@ -86,3 +83,20 @@ class TestStorage(unittest.TestCase):
         self.assertFalse(previous_updated == self.storage.updated)
         self.assertFalse(os.path.isfile(path))
         self.assertFalse(os.path.isdir(os.path.dirname(path)))
+
+class TestSumIndex(unittest.TestCase):
+    def setUp(self):
+        fdno, self.filename = tempfile.mkstemp()
+        # reserve the name, but remove it so shelve doesn't think
+        # it's an existing dbm
+        os.remove(self.filename)
+        self.index = SumIndex(self.filename)
+
+    def tearDown(self):
+        os.remove(self.filename)
+
+    def test_unicode_sum(self):
+        self.index.add(u'foo')
+        self.assertTrue(self.index.has_key('foo'))
+        self.index.remove(u'foo')
+        self.assertFalse(self.index.has_key('foo'))
