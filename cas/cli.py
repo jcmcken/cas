@@ -26,7 +26,7 @@ def main(ctx, debug, root):
     ctx.obj = CAS(rootdir)
 
 @click.command(name='add')
-@click.argument('filename', nargs=-1)
+@click.argument('filename', nargs=-1, required=True)
 @click.pass_obj
 def add(storage, filename):
     if not filename:
@@ -36,7 +36,7 @@ def add(storage, filename):
         storage.add(f)
 
 @click.command(name='rm')
-@click.argument('checksum', nargs=-1)
+@click.argument('checksum', nargs=-1, required=True)
 @click.pass_obj
 def rm(storage, checksum):
     if not checksum:
@@ -52,14 +52,16 @@ def ls(storage):
         click.echo(sum)
 
 @click.command(name='path')
-@click.argument('checksum', nargs=-1)
+@click.argument('checksum', required=True)
 @click.pass_obj
 def path(storage, checksum):
     if not checksum:
-        raise click.UsageError('must pass one or more checksums')
+        raise click.UsageError('must pass a checksum')
 
-    for c in checksum:
-        click.echo(storage.path(c))
+    if not storage.has_sum(checksum):
+        raise click.UsageError("no such checksum '%s' in storage" % checksum)
+
+    click.echo(storage.path(c))
 
 @click.command(name='meta')
 @click.pass_obj
