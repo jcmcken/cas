@@ -4,6 +4,9 @@ import json
 import datetime
 import errno
 import shutil
+import logging
+
+LOG = logging.getLogger(__name__)
 
 class CASLocked(RuntimeError): pass
 
