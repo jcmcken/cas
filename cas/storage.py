@@ -4,11 +4,19 @@ import json
 import datetime
 import errno
 import shutil
+import shelve
 import logging
 
 LOG = logging.getLogger(__name__)
 
 class CASLocked(RuntimeError): pass
+
+class SumIndex(shelve.DbfilenameShelf):
+    def add(self, sum):
+        self[sum] = None
+
+    def remove(self, sum):
+        del self[sum]
 
 class CAS(object):
     def __init__(self, root, sharding=(2, 2)):
@@ -18,6 +26,8 @@ class CAS(object):
         self.uuid = None
         self.created = None
         self.updated = None
+
+        self._sum_index = None
 
         self._initialize()
 
@@ -30,6 +40,11 @@ class CAS(object):
         self._initialize_dirs()
         self.lock()
         self._initialize_meta()
+        self._initialize_indices()
+        self.gc()
+
+    def _initialize_indices(self):
+        self._sum_index = SumIndex(self.sum_indexfile)
 
     def _initialize_dirs(self):
         map(mkdir_p, [self.tmpdir, self.storagedir])
@@ -85,6 +100,10 @@ class CAS(object):
             os.remove(self.lockfile)
 
     @property
+    def sum_indexfile(self):
+        return os.path.join(self.root, '.files')
+
+    @property
     def locked(self):
         return os.path.isfile(self.lockfile)
 
@@ -110,6 +129,21 @@ class CAS(object):
     def has_file(self, filename):
         return self.has_sum(self.checksum(filename))
 
+    def gc(self, full=False):
+        """
+        Perform garbage collection
+        """
+        LOG.debug('performing garbage collection')
+        
+        LOG.debug('removing temporary files')
+        for file in os.listdir(self.tmpdir):
+            os.remove(file)
+
+        LOG.debug('cleaning up file checksum index')
+        for sum in self._sum_index.keys():
+            if not self.has_sum(sum):
+                self._sum_index.remove(sum)
+
     def add(self, filename, verify=False):
         """
         Atomically add a file to storage
@@ -130,6 +164,10 @@ class CAS(object):
 
         mkdir_p(destdir)
 
+        # add sum to index before moving file in place, because this is easier
+        # to clean up if the add operation fails here
+        self._sum_index.add(sum)
+
         shutil.move(tmpfile, destdir)
 
         self._update()
@@ -143,16 +181,15 @@ class CAS(object):
 
         path = self.path(sum)
         os.remove(path)
+
+        # the reverse of add, this is easier to clean up if the file was removed
+        # successfully, but the index remains (gc will catch it)
+        self._sum_index.remove(sum)
+
         self._clean_dir(os.path.dirname(path))
 
         self._update()
         self._write_meta()
-
-    def clean(self):
-        """
-        Perform garbage collection
-        """
-        pass
 
     def _clean_dir(self, dir):
         if os.path.isdir(dir) and not os.listdir(dir):
@@ -169,3 +206,7 @@ class CAS(object):
 
     def checksum(self, filename):
         return checksum(filename)
+
+    def list(self):
+        for key, val in self._sum_index.iteritems():
+            yield key
