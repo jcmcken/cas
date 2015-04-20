@@ -1,4 +1,5 @@
 from cas.util import shard, get_uuid, mkdir_p, fullpath, checksum
+from cas.config import CAS_ROOT
 import os
 import json
 import datetime
@@ -138,7 +139,11 @@ register_type(NullType)
 DEFAULT_TYPE = NullType.type()
 
 class CAS(object):
-    def __init__(self, root, sharding=(2, 2), autoload=True):
+    def __init__(self, root=None, sharding=(2, 2), autoload=True):
+        root = root or CAS_ROOT
+        if not root:
+            raise TypeError('CAS requires a root directory')
+
         self.root = fullpath(root)
         self.shard_width, self.shard_depth = sharding
 
