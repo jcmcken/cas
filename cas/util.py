@@ -1,7 +1,25 @@
+import cas.log
 import uuid
 import os
 import errno
 import hashlib
+from functools import wraps
+import time
+import logging
+
+LOG = logging.getLogger(__name__)
+
+def timeit(hint):
+    def outer_wrapper(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            results = func(*args, **kwargs)
+            elapsed = time.time() - now
+            LOG.debug('executing func "%s" took %.5f seconds' % (hint, elapsed))
+            return results
+        return wrapper
+    return outer_wrapper
 
 def get_uuid():
     return uuid.uuid4().hex
@@ -24,6 +42,7 @@ def mkdir_p(directory):
 def fullpath(filename):
     return os.path.realpath(os.path.expanduser(filename))
 
+@timeit('cas.util.checksum')
 def checksum(filename, hash_func=hashlib.sha1, block_size=2**20):
     sum = hash_func()
     fd = open(filename)
