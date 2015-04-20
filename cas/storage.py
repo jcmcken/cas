@@ -6,6 +6,7 @@ import errno
 import shutil
 import shelve
 import logging
+import re
 
 LOG = logging.getLogger(__name__)
 
@@ -20,6 +21,106 @@ class SumIndex(shelve.DbfilenameShelf):
         LOG.debug('removing "%s" from sum index' % sum)
         del self[str(sum)]
 
+class MetaIndex(shelve.DbfilenameShelf):
+    def __init__(self, *args, **kwargs):
+        shelve.DbfilenameShelf.__init__(self, writeback=True, *args, **kwargs)
+
+    def add(self, key, value, sum):
+        LOG.debug('adding meta %s=%s for sum "%s"' % (key, value, sum))
+        self.setdefault(key, {}).setdefault(value, {})
+
+        self[key][value][str(sum)] = None
+
+        self.sync()
+
+    def remove(self, key, value, sum):
+        LOG.debug('removing meta %s=%s for sum "%s"' % (key, value, sum))
+        data_value = self.get(key, {}).get(value, None)
+
+        if data_value is None:
+            LOG.error('no such meta %s=%s for sum "%s"' % (key, value, sum))
+            return
+
+        del self[key][value][str(sum)]
+
+        # garbage collection on valuespace
+        if not self[key][value]:
+            del self[key][value]
+
+        # garbage collection on keyspace
+        if not self[key]:
+            del self[key]
+
+        self.sync()
+
+    def _find(self, sum):
+        locations = []
+        for key, valuespace in self.iteritems():
+            for value, items in valuespace.iteritems():
+                if sum in items:
+                    locations.append((key, value))
+        return locations
+
+    def remove_all(self, sum):
+        for key, value in self._find(sum):
+            self.remove(key, value, sum)
+
+    def equals(self, key, value):
+        return sorted(self.get(key, {}).get(value, {}).keys())
+
+    def match(self, key, value_regex):
+        matches = set()
+        for value, sums in self.get(key, {}).iteritems():
+            if re.search(value_regex, value):
+                map(matches.add, sums.keys())
+        return sorted(list(matches))
+
+class CASFileType(object):
+    """
+    Verify a file is of a given type, and then compute metadata
+    (key/value pairs) about the file, attaching that metadata
+    to the CAS version of the file.
+
+    The general principal here is that any computed metadata
+    should be invariant for a given CAS file (i.e. as long as
+    the checksum doesn't change, these metadata shouldn't change
+    either).
+    """
+    def __init__(self, filename):
+        self.filename = filename
+
+    def meta(self):
+        """
+        Calculate type-specific metadata about the given file.
+        """
+        raise NotImplementedError
+
+    def verify(self):
+        """
+        Is the given filename actually of the correct type?
+        """
+        raise NotImplementedError
+
+    def type(self):
+        """
+        A string representing this type.
+        """
+        raise NotImplementedError
+
+class NullType(CASFileType):
+    """
+    The default file type. Don't verify the file or compute any
+    metadata about it.
+    """
+    def verify(self):
+        pass
+
+    def meta(self):
+        return {}
+
+    def type(self):
+        return 'unknown'
+
 class CAS(object):
     def __init__(self, root, sharding=(2, 2), autoload=True):
         self.root = fullpath(root)
@@ -30,7 +131,8 @@ class CAS(object):
         self.updated = None
 
         self._sum_index = None
-
+        self._meta_index = None
+    
         if autoload:
             self._initialize()
 
@@ -68,6 +170,7 @@ class CAS(object):
 
     def _initialize_indices(self):
         self._sum_index = SumIndex(self.sum_indexfile)
+        self._meta_index = MetaIndex(self.meta_indexfile)
 
     def _initialize_dirs(self):
         map(mkdir_p, [self.tmpdir, self.storagedir])
@@ -130,6 +233,10 @@ class CAS(object):
         return os.path.join(self.root, '.files')
 
     @property
+    def meta_indexfile(self):
+        return os.path.join(self.root, '.filemeta')
+
+    @property
     def locked(self):
         return os.path.isfile(self.lockfile)
 
@@ -155,6 +262,12 @@ class CAS(object):
     def has_file(self, filename):
         return self.has_sum(self.checksum(filename))
 
+    def equals(self, key, value):
+        return self._meta_index.equals(key, value)
+
+    def match(self, key, value_regex):
+        return self._meta_index.match(key, value_regex)
+
     def gc(self, full=False):
         """
         Perform garbage collection
@@ -170,7 +283,7 @@ class CAS(object):
             if not self.has_sum(sum):
                 self._sum_index.remove(sum)
 
-    def add(self, filename):
+    def add(self, filename, type=NullType):
         """
         Atomically add a file to storage
         """
@@ -180,6 +293,12 @@ class CAS(object):
             LOG.warn('skipping, storage already has checksum "%s"' % sum)
             # don't re-add a file that already exists
             return
+
+        typed = type(filename)
+        typed.verify()
+
+        meta = typed.meta()
+        type_str = typed.type()
 
         path = self.path(sum)
         destfile = os.path.basename(path)
@@ -193,9 +312,12 @@ class CAS(object):
 
         mkdir_p(destdir)
 
-        # add sum to index before moving file in place, because this is easier
+        # add sum to indices before moving file in place, because this is easier
         # to clean up if the add operation fails here
         self._sum_index.add(sum)
+        self._meta_index.add('type', type_str, sum)
+        for key, val in meta.iteritems():
+            self._meta_index.add(key, val, sum)
 
         LOG.debug('moving "%s" to "%s"' % (tmpfile, destdir))
         shutil.move(tmpfile, destdir)
@@ -215,6 +337,7 @@ class CAS(object):
         # the reverse of add, this is easier to clean up if the file was removed
         # successfully, but the index remains (gc will catch it)
         self._sum_index.remove(sum)
+        self._meta_index.remove_all(sum)
 
         self._clean_dir(os.path.dirname(path))
 
