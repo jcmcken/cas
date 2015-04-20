@@ -66,12 +66,12 @@ class MetaIndex(shelve.DbfilenameShelf):
             self.remove(key, value, sum)
 
     def equals(self, key, value):
-        return sorted(self.get(key, {}).get(value, {}).keys())
+        return sorted(self.get(str(key), {}).get(str(value), {}).keys())
 
     def match(self, key, value_regex):
         matches = set()
-        for value, sums in self.get(key, {}).iteritems():
-            if re.search(value_regex, value):
+        for value, sums in self.get(str(key), {}).iteritems():
+            if re.search(str(value_regex), value):
                 map(matches.add, sums.keys())
         return sorted(list(matches))
 
