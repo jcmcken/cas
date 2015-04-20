@@ -118,8 +118,24 @@ class NullType(CASFileType):
     def meta(self):
         return {}
 
+    @classmethod
     def type(self):
-        return 'unknown'
+        return 'none'
+
+TYPE_MAP = {}
+
+def register_type(type_cls):
+    TYPE_MAP[type_cls.type()] = type_cls
+
+def get_type(type_str):
+    return TYPE_MAP.get(type_str, None)
+
+def types():
+    return TYPE_MAP.keys()
+
+register_type(NullType)
+
+DEFAULT_TYPE = NullType.type()
 
 class CAS(object):
     def __init__(self, root, sharding=(2, 2), autoload=True):

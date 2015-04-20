@@ -2,6 +2,7 @@ import click
 from cas.config import DEBUG, CAS_ROOT
 from cas.log import enable_debug
 from cas import CAS
+from cas.storage import DEFAULT_TYPE, types
 import json
 import os
 
@@ -27,8 +28,9 @@ def main(ctx, debug, root):
 
 @click.command(name='add')
 @click.argument('filename', nargs=-1, required=True)
+@click.option('-t', '--type', type=click.Choice(types()), default=DEFAULT_TYPE)
 @click.pass_obj
-def add(storage, filename):
+def add(storage, filename, type):
     if not filename:
         raise click.UsageError('must pass one or more files to add')
 
