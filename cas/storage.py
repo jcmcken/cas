@@ -170,7 +170,7 @@ class CAS(object):
             if not self.has_sum(sum):
                 self._sum_index.remove(sum)
 
-    def add(self, filename, verify=False):
+    def add(self, filename):
         """
         Atomically add a file to storage
         """
