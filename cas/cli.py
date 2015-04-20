@@ -73,9 +73,14 @@ def meta(storage):
 @click.command(name='match')
 @click.argument('key', required=True)
 @click.argument('value', metavar='REGEX', required=True)
+@click.option('-e', '--exact', is_flag=True)
 @click.pass_obj
-def match(storage, key, value):
-    for sum in storage.match(key, value):
+def match(storage, key, value, exact):
+    if exact:
+        func = storage.equals
+    else:
+        func = storage.match
+    for sum in func(key, value):
         click.echo(sum)
 
 main.add_command(add)
