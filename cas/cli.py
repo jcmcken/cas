@@ -68,11 +68,20 @@ def path(storage, checksum):
 def meta(storage):
     click.echo(json.dumps(storage.meta(), sort_keys=True, indent=2))
 
+@click.command(name='match')
+@click.argument('key', required=True)
+@click.argument('value', metavar='REGEX', required=True)
+@click.pass_obj
+def match(storage, key, value):
+    for sum in storage.match(key, value):
+        click.echo(sum)
+
 main.add_command(add)
 main.add_command(rm)
 main.add_command(ls)
 main.add_command(path)
 main.add_command(meta)
+main.add_command(match)
 
 if __name__ == '__main__':
     main()
