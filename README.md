@@ -36,6 +36,7 @@ $ cas meta
 
 Attach metadata to a file:
 
+```console
 $ cas add /path/to/some/file --type rpm
 $ cas match type rpm
 7335999eb54c15c67566186bdfc46f64e0d5a1aa
@@ -43,6 +44,7 @@ $ cas match --exact rpm.version 0.1.2
 $
 $ cas match --exact rpm.version 0.1.1
 7335999eb54c15c67566186bdfc46f64e0d5a1aa
+```
 
 ## API
 
