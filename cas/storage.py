@@ -1,5 +1,6 @@
-from cas.util import shard, get_uuid, mkdir_p, fullpath, checksum
+from cas.util import shard, get_uuid, mkdir_p, fullpath, checksum, timeit
 from cas.config import CAS_ROOT
+from cas.files import NullType
 import os
 import json
 import datetime
@@ -76,67 +77,11 @@ class MetaIndex(shelve.DbfilenameShelf):
                 map(matches.add, sums.keys())
         return sorted(list(matches))
 
-class CASFileType(object):
-    """
-    Verify a file is of a given type, and then compute metadata
-    (key/value pairs) about the file, attaching that metadata
-    to the CAS version of the file.
-
-    The general principal here is that any computed metadata
-    should be invariant for a given CAS file (i.e. as long as
-    the checksum doesn't change, these metadata shouldn't change
-    either).
-    """
-    def __init__(self, filename):
-        self.filename = filename
-
-    def meta(self):
-        """
-        Calculate type-specific metadata about the given file.
-        """
-        raise NotImplementedError
-
-    def verify(self):
-        """
-        Is the given filename actually of the correct type?
-        """
-        raise NotImplementedError
-
-    def type(self):
-        """
-        A string representing this type.
-        """
-        raise NotImplementedError
-
-class NullType(CASFileType):
-    """
-    The default file type. Don't verify the file or compute any
-    metadata about it.
-    """
-    def verify(self):
-        pass
-
-    def meta(self):
-        return {}
-
-    @classmethod
-    def type(self):
-        return 'none'
-
-TYPE_MAP = {}
-
-def register_type(type_cls):
-    TYPE_MAP[type_cls.type()] = type_cls
-
-def get_type(type_str):
-    return TYPE_MAP.get(type_str, None)
-
-def types():
-    return TYPE_MAP.keys()
-
-register_type(NullType)
-
-DEFAULT_TYPE = NullType.type()
+    def keyspace(self):
+        data = {}
+        for key, valuespace in self.iteritems():
+            data[key] = sorted(valuespace.keys())
+        return data
 
 class CAS(object):
     def __init__(self, root=None, sharding=(2, 2), autoload=True):
@@ -228,7 +173,7 @@ class CAS(object):
           'updated': self.updated, 
           'shard': { 
             'width': self.shard_width,
-            'depth': self.shard_width,
+            'depth': self.shard_depth,
           },
         }
 
@@ -289,6 +234,7 @@ class CAS(object):
     def match(self, key, value_regex):
         return self._meta_index.match(key, value_regex)
 
+    @timeit('cas.storage.CAS.gc')
     def gc(self, full=False):
         """
         Perform garbage collection
@@ -302,8 +248,10 @@ class CAS(object):
         LOG.debug('cleaning up file checksum index')
         for sum in self._sum_index.keys():
             if not self.has_sum(sum):
+                self._meta_index.remove_all(sum)
                 self._sum_index.remove(sum)
 
+    @timeit('cas.storage.CAS.add')
     def add(self, filename, type=NullType):
         """
         Atomically add a file to storage
@@ -319,7 +267,7 @@ class CAS(object):
         typed.verify()
 
         meta = typed.meta()
-        type_str = typed.type()
+        type_str = typed.type
 
         path = self.path(sum)
         destfile = os.path.basename(path)
@@ -348,6 +296,7 @@ class CAS(object):
 
         return sum
 
+    @timeit('cas.storage.CAS.remove')
     def remove(self, sum):
         if not self.has_sum(sum):
             raise OSError(errno.ENOENT, sum)
@@ -357,8 +306,8 @@ class CAS(object):
 
         # the reverse of add, this is easier to clean up if the file was removed
         # successfully, but the index remains (gc will catch it)
-        self._sum_index.remove(sum)
         self._meta_index.remove_all(sum)
+        self._sum_index.remove(sum)
 
         self._clean_dir(os.path.dirname(path))
 

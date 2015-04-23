@@ -6,6 +6,8 @@ import hashlib
 from functools import wraps
 import time
 import logging
+import imp
+import glob
 
 LOG = logging.getLogger(__name__)
 
@@ -20,6 +22,22 @@ def timeit(hint):
             return results
         return wrapper
     return outer_wrapper
+
+def load_plugin_file(filename):
+    LOG.debug('attempting to load plugin file "%s"' % filename)
+    full = fullpath(filename)
+    try:
+        plugin = imp.load_module('plugin', open(full), '', ('py', 'U', 1))
+    except ImportError:
+        LOG.exception('failed to load plugin from file "%s"' % filename)
+        return 
+    return plugin
+
+@timeit('cas.util.load_plugin_dir')
+def load_plugin_dir(directory):
+    LOG.debug('attempting to load plugins from directory "%s"' % directory)
+    for filename in glob.glob('%s/*.py' % directory):
+        load_plugin_file(filename)
 
 def get_uuid():
     return uuid.uuid4().hex

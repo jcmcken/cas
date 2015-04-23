@@ -1,16 +1,18 @@
 import click
-from cas.config import DEBUG, CAS_ROOT
+from cas.config import DEBUG, CAS_ROOT, CAS_PLUGIN_DIR
 from cas.log import enable_debug
 from cas import CAS
-from cas.storage import DEFAULT_TYPE, types
+from cas.files import DEFAULT_TYPE, types
 import json
 import os
+from cas.util import load_plugin_dir
 
 @click.group(name='cas')
 @click.option('--debug', is_flag=True)
 @click.option('--root', metavar='DIRECTORY')
+@click.option('--plugins-dir', metavar='DIRECTORY', default=CAS_PLUGIN_DIR)
 @click.pass_context
-def main(ctx, debug, root):
+def main(ctx, debug, root, plugins_dir):
     if debug and not DEBUG:
         enable_debug()
 
@@ -23,6 +25,9 @@ def main(ctx, debug, root):
         raise click.UsageError('"%s" is not a directory' % rootdir)
     elif os.path.isdir(rootdir) and os.listdir(rootdir) and not CAS.check(rootdir):
         raise click.UsageError('"%s" does not look like a valid CAS directory' % rootdir) 
+
+    # load plugins
+    load_plugin_dir(plugins_dir)
 
     ctx.obj = CAS(rootdir)
 
