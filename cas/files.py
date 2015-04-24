@@ -1,3 +1,9 @@
+class InvalidFileType(TypeError):
+    def __init__(self, filename, typename, exception):
+        self.filename = filename
+        self.type = typename
+        self.exception = exception
+
 class CASFileType(object):
     """
     Verify a file is of a given type, and then compute metadata

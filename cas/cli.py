@@ -2,7 +2,7 @@ import click
 from cas.config import DEBUG, CAS_ROOT, CAS_PLUGIN_DIR
 from cas.log import enable_debug
 from cas import CAS
-from cas.files import DEFAULT_TYPE, types
+from cas.files import DEFAULT_TYPE, types, get_type, InvalidFileType
 import json
 import os
 from cas.util import load_plugin_dir
@@ -33,14 +33,21 @@ def main(ctx, debug, root, plugins_dir):
 
 @click.command(name='add')
 @click.argument('filename', nargs=-1, required=True)
-@click.option('-t', '--type', type=click.Choice(types()), default=DEFAULT_TYPE)
+@click.option('-t', '--type', metavar='TYPE', default=DEFAULT_TYPE)
 @click.pass_obj
 def add(storage, filename, type):
+    valid_types = types()
+    if type not in valid_types:
+        raise click.UsageError('invalid type, must pass one of: %s' % ', '.join(valid_types))
+
     if not filename:
         raise click.UsageError('must pass one or more files to add')
 
     for f in filename:
-        storage.add(f)
+        try:
+            storage.add(f, type=get_type(type))
+        except InvalidFileType, e:
+            raise click.UsageError('file "%s" is not of type "%s"' % (f, type))
 
 @click.command(name='rm')
 @click.argument('checksum', nargs=-1, required=True)
