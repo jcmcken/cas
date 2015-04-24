@@ -83,6 +83,9 @@ class MetaIndex(shelve.DbfilenameShelf):
             data[key] = sorted(valuespace.keys())
         return data
 
+    def has_sum(self, sum):
+        return bool(self._find(sum))
+
 class CAS(object):
     def __init__(self, root=None, sharding=(2, 2), autoload=True):
         root = root or CAS_ROOT
@@ -192,6 +195,8 @@ class CAS(object):
 
     def unlock(self):
         if self.locked:
+            self._sum_index.sync()
+            self._meta_index.sync()
             os.remove(self.lockfile)
 
     @property
@@ -243,7 +248,7 @@ class CAS(object):
         
         LOG.debug('removing temporary files')
         for file in os.listdir(self.tmpdir):
-            os.remove(file)
+            os.remove(os.path.join(self.tmpdir, file))
 
         LOG.debug('cleaning up file checksum index')
         for sum in self._sum_index.keys():
@@ -304,8 +309,8 @@ class CAS(object):
         path = self.path(sum)
         os.remove(path)
 
-        # the reverse of add, this is easier to clean up if the file was removed
-        # successfully, but the index remains (gc will catch it)
+        # the reverse of add, if the remove fails, the indices never get
+        # updated, so nothing to clean up
         self._meta_index.remove_all(sum)
         self._sum_index.remove(sum)
 

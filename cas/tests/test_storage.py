@@ -5,6 +5,7 @@ from cas.storage import SumIndex
 import shutil
 import os
 import json
+from mock import patch
 
 class TestStorage(unittest.TestCase):
     def setUp(self):
@@ -83,6 +84,17 @@ class TestStorage(unittest.TestCase):
         self.assertFalse(previous_updated == self.storage.updated)
         self.assertFalse(os.path.isfile(path))
         self.assertFalse(os.path.isdir(os.path.dirname(path)))
+
+    @patch('shutil.move')
+    def test_add_failure(self, move):
+        sum = self.storage.add(self.testfile)
+        self.assertFalse(self.storage.has_sum(sum))
+        self.storage.unlock()
+        cas = CAS(self.storage_dir)
+
+        # gc should've cleaned up this failed add
+        self.assertFalse(bool(cas._sum_index.get(sum)))
+        self.assertFalse(bool(cas._meta_index.has_sum(sum)))
 
 class TestSumIndex(unittest.TestCase):
     def setUp(self):
