@@ -1,5 +1,5 @@
 class InvalidFileType(TypeError):
-    def __init__(self, filename, typename, exception):
+    def __init__(self, filename, typename, exception=None):
         self.filename = filename
         self.type = typename
         self.exception = exception

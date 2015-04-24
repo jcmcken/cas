@@ -56,7 +56,7 @@ filling in the required methods.
 For example:
 
 ```python
-from cas.files import CASFileType, register_type
+from cas.files import CASFileType, register_type, InvalidFileType
 import my
 
 __name__ = 'myplugin'
@@ -66,13 +66,16 @@ class MyType(CASFileType):
 
     def verify(self):
         if not self.filename.startswith('my'):
-            raise RuntimeError
+            raise InvalidFileType(self.filename, self.type)
 
     def meta(self):
         return my.meta(self.filename)
 
 register_type(MyType)
 ```
+
+(Note that the ``verify`` method must raise an ``InvalidFileType`` if the
+file's type is found to be incorrect)
 
 Next, just stick the ``py`` file in the plugins directory. By default,
 this is ``cas/plugins`` wherever you have ``cas`` installed. (You can

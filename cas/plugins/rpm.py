@@ -1,6 +1,5 @@
 from cas.files import CASFileType, register_type, InvalidFileType
 import rpm
-from operator import itemgetter
 import logging
 
 LOG = logging.getLogger(__name__)
