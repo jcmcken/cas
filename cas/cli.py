@@ -43,11 +43,17 @@ def add(storage, filename, type):
     if not filename:
         raise click.UsageError('must pass one or more files to add')
 
+    sums = set()
+
     for f in filename:
         try:
-            storage.add(f, type=get_type(type))
+            sum = storage.add(f, type=get_type(type))
+            sums.add(sum)
         except InvalidFileType, e:
             raise click.UsageError('file "%s" is not of type "%s"' % (f, type))
+
+    for sum in sorted(list(sums)):
+        click.echo(sum)
 
 @click.command(name='rm')
 @click.argument('checksum', nargs=-1, required=True)

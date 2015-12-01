@@ -266,7 +266,7 @@ class CAS(object):
         if self.has_sum(sum):
             LOG.warn('skipping, storage already has checksum "%s"' % sum)
             # don't re-add a file that already exists
-            return
+            return sum
 
         typed = type(filename)
         typed.verify()
